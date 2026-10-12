@@ -1,9 +1,8 @@
-# artefatos gerados pelas ferramentas de validação
-build/shots/
-build/shot.png
+# artefatos gerados localmente pelas ferramentas de validação
 build/_probe*.html
 build/_scene.html
 build/bundle.check.mjs
+build/_captures/
 
 # sistema operacional / editor
 Thumbs.db

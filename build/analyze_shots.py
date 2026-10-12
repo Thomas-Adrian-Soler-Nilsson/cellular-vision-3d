@@ -13,7 +13,8 @@ from collections import Counter
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SHOTS = os.path.join(HERE, 'shots')
+# usa as capturas da documentação por padrão; aceita um diretório como argumento
+SHOTS = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', 'docs', 'screenshots')
 
 # cores-assinatura (CIELAB não é necessário: comparação em RGB é suficiente)
 SIGNATURES = {

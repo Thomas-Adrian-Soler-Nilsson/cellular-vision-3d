@@ -12,7 +12,11 @@ import { execFileSync } from 'node:child_process';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(ROOT, '..', 'index.html');
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const OUTDIR = path.join(ROOT, 'shots');
+/* as capturas usadas na documentação ficam em docs/screenshots e são versionadas;
+   novas execuções gravam em build/_captures para não sobrescrever a documentação */
+const OUTDIR = process.argv[2] === '--docs'
+  ? path.join(ROOT, '..', 'docs', 'screenshots')
+  : path.join(ROOT, '_captures');
 fs.mkdirSync(OUTDIR, { recursive: true });
 
 const base = fs.readFileSync(SRC, 'utf8');
