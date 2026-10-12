@@ -1,0 +1,12 @@
+# artefatos gerados pelas ferramentas de validação
+build/shots/
+build/shot.png
+build/_probe*.html
+build/_scene.html
+build/bundle.check.mjs
+
+# sistema operacional / editor
+Thumbs.db
+.DS_Store
+desktop.ini
+*.log

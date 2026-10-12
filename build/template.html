@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Cellular Vision 3D — Laboratório de Citologia</title>
+<style>
+  :root{
+    --bg:#05080f;
+    --bg-2:#03060a;
+    --panel:rgba(9,15,23,.82);
+    --panel-solid:#080d15;
+    --line:rgba(120,180,230,.12);
+    --line-2:rgba(120,180,230,.24);
+    --txt:#e2eef8;
+    --txt-dim:#7e94a8;
+    --txt-faint:#4e6a7e;
+    --accent:#5ec8ff;
+    --accent-soft:rgba(94,200,255,.13);
+    --accent-glow:rgba(94,200,255,.34);
+    --accent-2:#7ef0c8;
+    --warn:#ffcc66;
+    --good:#7ef0c8;
+    --bad:#ff7e7e;
+    --font:"Inter","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    --r-pill:999px;
+    --r-md:10px;
+    --r-lg:14px;
+    --ease:cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:var(--font); font-size:13px; overflow:hidden;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  body.study{font-size:14.5px;}
+  body.study .ficha-sec p, body.study .ficha-sec li, body.study .theory-block p, body.study .theory-block li{font-size:13.6px;}
+
+  #app{
+    display:grid;
+    grid-template-columns:318px 1fr 382px;
+    grid-template-rows:58px 1fr;
+    height:100vh; height:100dvh; width:100%; max-width:100vw;
+    position:relative; overflow:hidden;
+  }
+  body.aula #app{grid-template-rows:58px 54px 1fr;}
+
+  /* ===================== HEADER ===================== */
+  header{
+    grid-column:1 / -1; grid-row:1;
+    display:flex; align-items:center; gap:14px;
+    padding:0 14px;
+    background:linear-gradient(180deg,#0a121c,#060b12);
+    border-bottom:1px solid var(--line);
+    z-index:22;
+  }
+  .brand{display:flex; align-items:center; gap:11px; min-width:186px;}
+  .brand .orb{
+    width:24px;height:24px;border-radius:50%;flex:none;
+    background:radial-gradient(circle at 32% 30%, #b6ecff, #3d8fd0 55%, #0e2c4a);
+    box-shadow:0 0 16px rgba(94,200,255,.55), inset 0 0 4px rgba(255,255,255,.3);
+  }
+  .brand h1{font-size:14px; font-weight:600; letter-spacing:.2px; white-space:nowrap;}
+  .brand h1 b{color:var(--accent); font-weight:700;}
+  .brand small{display:block; font-size:9px; color:var(--txt-dim); letter-spacing:1.5px; text-transform:uppercase; font-weight:600; margin-top:2px;}
+
+  /* ---------- botões minimalistas em pílula ---------- */
+  button{
+    font-family:inherit; font-size:11.5px; color:var(--txt-dim);
+    background:transparent; border:none; border-radius:var(--r-pill);
+    padding:7px 13px; cursor:pointer; white-space:nowrap;
+    font-weight:500; letter-spacing:.15px;
+    display:inline-flex; align-items:center; gap:6px;
+    transition:background .2s var(--ease), color .2s var(--ease),
+               box-shadow .3s var(--ease), transform .14s var(--ease);
+  }
+  button:hover{color:var(--txt); background:rgba(255,255,255,.05);}
+  button:active{transform:scale(.97);}
+  button:focus-visible{outline:1px solid var(--accent-glow); outline-offset:2px;}
+  input[type=range]:focus-visible, input[type=checkbox]:focus-visible, input[type=text]:focus-visible{outline:1px solid var(--accent-glow); outline-offset:2px;}
+
+  /* acessibilidade: respeita a preferência por menos movimento */
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{
+      animation-duration:.001ms !important; animation-iteration-count:1 !important;
+      transition-duration:.001ms !important;
+    }
+  }
+  button.active{
+    color:#eaf8ff; background:var(--accent-soft);
+    box-shadow:inset 0 0 0 1px var(--accent-glow), 0 0 16px rgba(94,200,255,.14);
+  }
+  button.ghost{padding:7px 10px;}
+  button.ghost:hover{background:rgba(255,255,255,.045);}
+
+  .mode-tabs{
+    display:flex; gap:2px; flex:none; padding:4px;
+    background:rgba(255,255,255,.03);
+    border:1px solid var(--line); border-radius:var(--r-pill);
+  }
+  .mode-tabs button{padding:6px 14px; font-size:11.5px; font-weight:600;}
+
+  .topbar-modes{
+    display:flex; gap:2px; flex:1; min-width:0;
+    overflow-x:auto; scrollbar-width:none;
+    padding:4px; background:rgba(255,255,255,.02);
+    border:1px solid var(--line); border-radius:var(--r-pill);
+  }
+  .topbar-modes::-webkit-scrollbar{display:none;}
+  .topbar-modes button{flex:none;}
+
+  /* ===================== MODULE BAR ===================== */
+  #moduleBar{
+    display:none; grid-column:1 / -1; grid-row:2;
+    align-items:center; gap:6px;
+    padding:8px 14px; overflow-x:auto; scrollbar-width:none;
+    background:linear-gradient(180deg,#0a1420,#07111a);
+    border-bottom:1px solid var(--line);
+    z-index:21;
+  }
+  #moduleBar::-webkit-scrollbar{display:none;}
+  body.aula #moduleBar{display:flex;}
+  .mod-btn{
+    display:flex; flex-direction:column; align-items:flex-start; gap:1px;
+    min-width:132px; padding:6px 12px;
+    border:1px solid var(--line); border-radius:9px;
+    background:rgba(255,255,255,.02);
+    color:var(--txt-dim); cursor:pointer; text-align:left;
+    font-family:inherit; transition:.2s var(--ease);
+  }
+  .mod-btn:hover{background:rgba(94,200,255,.06); color:var(--txt); border-color:var(--line-2);}
+  .mod-btn.active{
+    background:var(--accent-soft); color:#eaf8ff;
+    border-color:var(--accent-glow); box-shadow:0 0 16px rgba(94,200,255,.16);
+  }
+  .mod-btn .num{font-size:8.5px; letter-spacing:1.4px; text-transform:uppercase; opacity:.75; font-weight:700;}
+  .mod-btn .ttl{font-size:11.5px; font-weight:600; letter-spacing:.15px;}
+
+  /* ===================== PANELS ===================== */
+  .panel{
+    background:var(--panel);
+    backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    border-right:1px solid var(--line);
+    overflow-y:auto; overflow-x:hidden;
+    padding:14px 14px 34px; z-index:10;
+  }
+  #left{grid-column:1; grid-row:2;}
+  #right{grid-column:3; grid-row:2; border-right:none; border-left:1px solid var(--line);}
+  body.aula #left, body.aula #right{grid-row:3;}
+  .panel::-webkit-scrollbar{width:6px;}
+  .panel::-webkit-scrollbar-thumb{background:rgba(120,180,230,.15); border-radius:8px;}
+  .panel::-webkit-scrollbar-track{background:transparent;}
+
+  .sec{margin-bottom:20px;}
+  .sec > h2{
+    font-size:9.5px; letter-spacing:1.8px; text-transform:uppercase;
+    color:var(--txt-dim); font-weight:600; margin-bottom:10px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .sec > h2::after{content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent);}
+
+  .search{position:relative; margin-bottom:12px;}
+  .search input{
+    width:100%; padding:9px 12px 9px 34px;
+    background:rgba(255,255,255,.035);
+    border:1px solid var(--line); border-radius:var(--r-md);
+    color:var(--txt); font-family:inherit; font-size:12.5px; outline:none;
+    transition:.2s var(--ease);
+  }
+  .search input:focus{border-color:rgba(94,200,255,.45); background:rgba(94,200,255,.05);}
+  .search input::placeholder{color:var(--txt-faint);}
+  .search svg{position:absolute; left:11px; top:50%; transform:translateY(-50%); opacity:.45;}
+
+  .org-list{display:flex; flex-direction:column; gap:1px;}
+  .org-item{
+    display:flex; align-items:center; gap:10px; width:100%;
+    padding:8px 10px; border-radius:8px;
+    border:none; background:none; cursor:pointer;
+    font-family:inherit; font-size:12.3px; color:var(--txt);
+    text-align:left; position:relative;
+    transition:background .16s var(--ease), color .16s var(--ease);
+  }
+  .org-item::before{
+    content:""; position:absolute; left:0; top:22%; bottom:22%; width:2px;
+    border-radius:2px; background:transparent; transform:scaleY(.3);
+    transition:background .2s var(--ease), transform .2s var(--ease);
+  }
+  .org-item:hover{background:rgba(94,200,255,.06);}
+  .org-item.active{background:rgba(94,200,255,.1); color:#fff;}
+  .org-item.active::before{background:var(--accent); transform:scaleY(1); box-shadow:0 0 10px var(--accent);}
+  .org-swatch{width:9px;height:9px;border-radius:50%; flex:none; box-shadow:0 0 8px currentColor; transition:transform .2s var(--ease);}
+  .org-item.active .org-swatch{transform:scale(1.25);}
+  .org-item .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+  .row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;}
+  .row label{font-size:11.5px; color:var(--txt-dim);}
+  .row .val{font-size:11px; color:var(--accent); font-variant-numeric:tabular-nums; font-weight:500;}
+
+  input[type=range]{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:3px; border-radius:3px;
+    background:rgba(120,180,230,.18); outline:none; margin:2px 0 14px;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:12px;height:12px;border-radius:50%;
+    background:#eaf8ff; cursor:pointer;
+    border:2px solid var(--accent);
+    box-shadow:0 0 10px rgba(94,200,255,.55);
+    transition:transform .14s var(--ease);
+  }
+  input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15);}
+  input[type=range]::-moz-range-thumb{
+    width:12px;height:12px;border:none;border-radius:50%;
+    background:#eaf8ff; cursor:pointer; border:2px solid var(--accent);
+  }
+
+  .toggle-row{
+    display:flex; align-items:center; gap:9px; margin-bottom:7px;
+    font-size:12px; color:var(--txt-dim); cursor:pointer;
+    user-select:none; padding:3px 0; transition:color .15s var(--ease);
+  }
+  .toggle-row:hover{color:var(--txt);}
+  .toggle-row input{accent-color:var(--accent); cursor:pointer; width:14px; height:14px;}
+  .note{font-size:10.5px; color:var(--txt-faint); line-height:1.55; margin-top:8px;}
+
+  /* ===================== VIEWPORT ===================== */
+  #viewport{grid-column:2; grid-row:2; position:relative; overflow:hidden; background:var(--bg-2);}
+  body.aula #viewport{grid-row:3;}
+  #c{display:block; width:100%; height:100%; touch-action:none; cursor:grab;}
+  #c:active{cursor:grabbing;}
+
+  .overlay{position:absolute; pointer-events:none; z-index:5;}
+  .overlay.clickable{pointer-events:auto;}
+
+  #topLeftInfo{top:14px; left:14px; display:flex; flex-direction:column; gap:6px; max-width:min(340px, 46vw);}
+  .pill{
+    background:rgba(6,11,18,.72); border:1px solid var(--line);
+    border-radius:var(--r-pill); padding:6px 14px;
+    font-size:11px; letter-spacing:.3px;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    display:flex; align-items:center; gap:8px; width:fit-content;
+  }
+  .pill .lvl{color:var(--accent); font-weight:600; letter-spacing:.5px;}
+  .pill.disclaimer{
+    color:var(--warn); border-color:rgba(255,204,102,.22);
+    font-size:10px; border-radius:var(--r-md);
+    line-height:1.45; padding:7px 12px; display:block;
+  }
+
+  #scaleBox{
+    bottom:16px; left:16px;
+    background:rgba(6,11,18,.72); border:1px solid var(--line);
+    border-radius:var(--r-md); padding:9px 14px;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
+  #scaleBar{
+    height:7px; width:110px; margin-bottom:5px;
+    border-left:1.5px solid #cfe8f7; border-right:1.5px solid #cfe8f7; border-bottom:1.5px solid #cfe8f7;
+    transition:width .1s linear;
+  }
+  #scaleLabel{font-size:10.5px; color:var(--txt-dim); letter-spacing:.5px; font-weight:500;}
+  #scaleLabel small{display:block; font-size:9px; color:var(--txt-faint); letter-spacing:.3px; margin-top:2px;}
+
+  #animBar{
+    bottom:16px; left:50%; transform:translateX(-50%);
+    background:rgba(6,11,18,.76); border:1px solid var(--line);
+    border-radius:var(--r-pill); padding:5px;
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    display:flex; align-items:center; gap:2px;
+  }
+  #animBar button{padding:6px 12px; font-size:11px;}
+  #animBar .speed{display:flex; align-items:center; gap:8px; font-size:10.5px; color:var(--txt-dim); padding:0 12px;}
+  #animBar .speed input[type=range]{width:70px; margin:0; height:2px;}
+  #animBar .speed input[type=range]::-webkit-slider-thumb{width:10px;height:10px;}
+
+  /* floating world label */
+  #worldLabel{
+    position:absolute; z-index:8; pointer-events:none;
+    transform:translate(-50%,-100%);
+    opacity:0; transition:opacity .2s var(--ease);
+    display:flex; flex-direction:column; align-items:center;
+    max-width:240px;
+  }
+  #worldLabel .lb-chip{
+    background:rgba(6,11,18,.92);
+    border:1px solid var(--accent-glow);
+    color:#eaf8ff; padding:5px 12px; border-radius:var(--r-pill);
+    font-size:11.5px; font-weight:500; letter-spacing:.25px;
+    white-space:nowrap; backdrop-filter:blur(8px);
+    box-shadow:0 0 20px rgba(94,200,255,.3), inset 0 0 0 1px rgba(94,200,255,.1);
+    margin-bottom:6px; display:flex; align-items:center; gap:7px;
+  }
+  #worldLabel .lb-dot{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--accent); box-shadow:0 0 10px var(--accent);
+    animation:pulseDot 1.6s ease-in-out infinite;
+  }
+  #worldLabel .lb-pin{
+    width:1.5px; height:34px;
+    background:linear-gradient(180deg, var(--accent) 0%, rgba(94,200,255,0) 100%);
+    box-shadow:0 0 10px var(--accent);
+  }
+  @keyframes pulseDot{0%,100%{opacity:1; transform:scale(1);} 50%{opacity:.55; transform:scale(.85);}}
+
+  #tooltip{
+    position:fixed; z-index:60; pointer-events:none;
+    background:rgba(6,11,18,.94); border:1px solid rgba(94,200,255,.32);
+    border-radius:8px; padding:5px 11px;
+    font-size:11.5px; color:#eaf8ff; white-space:nowrap;
+    opacity:0; transition:opacity .14s var(--ease);
+    box-shadow:0 8px 24px rgba(0,0,0,.55);
+  }
+
+  #loading{
+    position:absolute; inset:0; z-index:30;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+    background:var(--bg-2); transition:opacity .7s var(--ease);
+  }
+  #loading.hide{opacity:0; pointer-events:none;}
+  .loader-ring{
+    width:42px;height:42px;border-radius:50%;
+    border:2px solid rgba(94,200,255,.12); border-top-color:var(--accent);
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #loading p{font-size:12px; color:var(--txt-dim); letter-spacing:.8px;}
+
+  /* ===================== FICHA CIENTÍFICA ===================== */
+  .ficha-head{border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:16px;}
+  .chip{
+    display:inline-block; font-size:9px; letter-spacing:1.4px; text-transform:uppercase;
+    color:var(--accent-2); border:1px solid rgba(126,240,200,.26);
+    border-radius:var(--r-pill); padding:3px 11px; margin-bottom:10px;
+    font-weight:600; background:rgba(126,240,200,.05);
+  }
+  #right h2{
+    font-size:20px; font-weight:600; letter-spacing:-.3px; line-height:1.18;
+    color:#f5fbff; display:flex; align-items:center; gap:10px;
+  }
+  #right h2 .h-dot{width:10px;height:10px;border-radius:50%;flex:none; box-shadow:0 0 12px currentColor;}
+  .escala{
+    margin-top:11px; font-size:11px; color:var(--warn);
+    background:rgba(255,204,102,.06); border-left:2px solid rgba(255,204,102,.45);
+    padding:8px 11px; border-radius:0 8px 8px 0; line-height:1.5;
+  }
+  .ficha-sec{margin-bottom:15px;}
+  .ficha-sec h3{
+    font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase;
+    color:var(--accent); margin-bottom:7px; font-weight:600;
+    display:flex; align-items:center; gap:7px;
+  }
+  .ficha-sec h3::before{content:""; width:3px;height:3px;border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent);}
+  .ficha-sec p{line-height:1.68; color:#b9cddd; font-size:12.4px;}
+  .ficha-sec ul{list-style:none; display:flex; flex-direction:column; gap:6px;}
+  .ficha-sec li{line-height:1.58; color:#b9cddd; font-size:12.4px; padding-left:16px; position:relative;}
+  .ficha-sec li::before{
+    content:""; position:absolute; left:2px; top:8px;
+    width:4px;height:4px;border-radius:50%;
+    background:rgba(94,200,255,.6); box-shadow:0 0 6px rgba(94,200,255,.35);
+  }
+  .empty-ficha{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:60vh; text-align:center; color:var(--txt-dim); gap:14px; padding:20px;
+  }
+  .empty-ficha .big{font-size:38px; opacity:.2;}
+  .empty-ficha p{font-size:12.5px; line-height:1.65; max-width:270px;}
+  .tagline{display:flex; flex-wrap:wrap; gap:5px; margin-top:12px;}
+
+  /* ===================== COMPARAÇÃO ESTRUTURAL ===================== */
+  .cmp-sec .cmp-grid{display:flex; flex-direction:column; gap:1px; border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden;}
+  .cmp-head, .cmp-row{display:grid; grid-template-columns:74px 1fr 1fr; gap:8px; padding:7px 9px; font-size:10.8px; line-height:1.45;}
+  .cmp-head{background:rgba(94,200,255,.08); color:var(--accent); font-weight:600; letter-spacing:.4px; font-size:9.5px; text-transform:uppercase;}
+  .cmp-row{background:rgba(255,255,255,.015); color:#b9cddd;}
+  .cmp-row .crit{color:var(--txt-faint); font-weight:600; font-size:9.5px; text-transform:uppercase; letter-spacing:.5px;}
+  .cmp-dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; box-shadow:0 0 7px currentColor; vertical-align:middle;}
+  .ficha-actions{display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;}
+  .ficha-btn{
+    flex:1; min-width:130px; padding:8px 12px;
+    background:rgba(255,255,255,.03); border:1px solid var(--line-2);
+    border-radius:var(--r-pill); color:var(--txt-dim);
+    font-family:inherit; font-size:11px; font-weight:600; cursor:pointer;
+    transition:.2s var(--ease);
+  }
+  .ficha-btn:hover:not(:disabled){background:rgba(94,200,255,.1); color:#eaf8ff; border-color:var(--accent-glow);}
+  .ficha-btn.active{background:var(--accent-soft); color:#eaf8ff; border-color:var(--accent-glow); box-shadow:0 0 14px rgba(94,200,255,.18);}
+  .ficha-btn:disabled{opacity:.38; cursor:default;}
+  .tag{
+    font-size:10px; padding:3px 9px; border-radius:var(--r-pill);
+    background:rgba(94,200,255,.06); border:1px solid var(--line);
+    color:var(--txt-dim); letter-spacing:.2px;
+  }
+
+  /* ===================== AULA (teoria) ===================== */
+  #aulaPanel{display:none;}
+  body.aula #explorePanel{display:none;}
+  body.aula #aulaPanel{display:block;}
+  .aula-header{margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid var(--line);}
+  .aula-header .mnum{
+    display:inline-block; font-size:9px; letter-spacing:1.6px; text-transform:uppercase;
+    color:var(--accent); font-weight:700; margin-bottom:7px;
+    padding:3px 9px; border:1px solid rgba(94,200,255,.3); border-radius:var(--r-pill);
+    background:rgba(94,200,255,.06);
+  }
+  .aula-header h2{font-size:17px; font-weight:600; color:#f0f8ff; line-height:1.26; letter-spacing:-.2px;}
+  .aula-header p{font-size:11.5px; color:var(--txt-dim); margin-top:5px; line-height:1.5;}
+
+  .theory{display:flex; flex-direction:column; gap:10px;}
+  .theory-block{
+    padding:11px 13px; background:rgba(255,255,255,.022);
+    border:1px solid var(--line); border-radius:var(--r-md);
+  }
+  .theory-block h4{
+    font-size:10px; letter-spacing:1.3px; text-transform:uppercase;
+    color:var(--accent-2); font-weight:700; margin-bottom:7px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .theory-block h4::before{content:""; width:3px; height:10px; background:var(--accent-2); border-radius:2px;}
+  .theory-block p, .theory-block li{font-size:12.2px; line-height:1.62; color:#b9cddd;}
+  .theory-block ul{list-style:none; margin-top:6px; display:flex; flex-direction:column; gap:5px;}
+  .theory-block li{padding-left:14px; position:relative;}
+  .theory-block li::before{content:"▸"; position:absolute; left:0; color:var(--accent); font-size:10px;}
+  .theory-block b{color:#e2eef8; font-weight:600;}
+  .theory-block .hl{color:var(--accent-2); font-weight:600;}
+  .theory-block .warn{color:var(--warn); font-weight:600;}
+
+  /* ===================== LAB CONTROLS ===================== */
+  #labControls{
+    display:none;
+    position:absolute; bottom:96px; left:50%; transform:translateX(-50%);
+    width:min(680px, calc(100% - 32px));
+    background:rgba(6,11,18,.86);
+    border:1px solid var(--line-2); border-radius:var(--r-lg);
+    padding:12px 16px;
+    backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    max-height:min(52vh, calc(100% - 200px)); overflow-y:auto; overscroll-behavior:contain;
+    box-shadow:0 14px 44px rgba(0,0,0,.55);
+    z-index:12;
+  }
+  body.aula #labControls.show{display:block;}
+  #labControls h4{
+    font-size:10px; letter-spacing:1.4px; text-transform:uppercase;
+    color:var(--accent); margin-bottom:10px;
+    display:flex; align-items:center; gap:7px;
+  }
+  #labControls h4::before{content:""; width:5px;height:5px;border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent);}
+  #labControls .ctrl-row{display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
+  #labControls .ctrl-col{display:flex; flex-direction:column; gap:4px; min-width:172px; flex:1;}
+  #labControls .ctrl-col > label{font-size:11px; color:var(--txt-dim); display:flex; justify-content:space-between; gap:10px;}
+  #labControls .ctrl-col > label b{color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600;}
+  #labControls .ctrl-col input[type=range]{margin:0;}
+  #labControls .counter{display:flex; align-items:baseline; gap:6px; font-variant-numeric:tabular-nums;}
+  #labControls .counter .num{font-size:23px; font-weight:700; color:var(--accent); letter-spacing:-.5px; line-height:1;}
+  #labControls .counter .unit{font-size:10.5px; color:var(--txt-dim);}
+  #labControls .pill-btns{display:flex; gap:4px; flex-wrap:wrap;}
+  #labControls .status{
+    font-size:11px; padding:5px 11px; border-radius:var(--r-pill);
+    background:rgba(94,200,255,.1); border:1px solid rgba(94,200,255,.28);
+    color:#eaf8ff; font-weight:600; white-space:nowrap;
+  }
+  #labControls .status.good{border-color:rgba(126,240,200,.45); background:rgba(126,240,200,.1); color:var(--good);}
+  #labControls .status.bad{border-color:rgba(255,126,126,.45); background:rgba(255,126,126,.1); color:var(--bad);}
+  #labControls .lab-note{font-size:10px; color:var(--txt-faint); line-height:1.5; margin-top:9px;}
+
+  /* ===================== QUESTÃO ===================== */
+  #questionCard{display:none; margin-top:6px; padding-top:16px; border-top:1px solid var(--line);}
+  body.aula #questionCard.show{display:block;}
+  #questionCard .q-badge{
+    display:inline-block; font-size:9px; letter-spacing:1.5px; text-transform:uppercase;
+    font-weight:700; color:var(--warn);
+    padding:3px 10px; border:1px solid rgba(255,204,102,.3);
+    border-radius:var(--r-pill); background:rgba(255,204,102,.06); margin-bottom:10px;
+  }
+  #questionCard .q-text{font-size:13px; line-height:1.6; color:#e2eef8; font-weight:500; margin-bottom:12px;}
+  #questionCard .q-alts{display:flex; flex-direction:column; gap:6px;}
+  .alt-btn{
+    display:flex; gap:10px; align-items:flex-start;
+    padding:10px 12px; border-radius:var(--r-md);
+    background:rgba(255,255,255,.03); border:1px solid var(--line);
+    color:var(--txt); font-family:inherit; font-size:12.3px;
+    text-align:left; cursor:pointer; line-height:1.48;
+    transition:.18s var(--ease);
+  }
+  .alt-btn:hover:not(:disabled){background:rgba(94,200,255,.08); border-color:var(--line-2);}
+  .alt-btn .letter{
+    flex:none; width:20px; height:20px; border-radius:50%;
+    background:rgba(94,200,255,.1); border:1px solid rgba(94,200,255,.28);
+    color:var(--accent); font-weight:700; font-size:10.5px;
+    display:inline-flex; align-items:center; justify-content:center;
+  }
+  .alt-btn.correct{background:rgba(126,240,200,.1); border-color:rgba(126,240,200,.45); color:#e6fff7;}
+  .alt-btn.correct .letter{background:var(--good); border-color:var(--good); color:#04211a;}
+  .alt-btn.wrong{background:rgba(255,126,126,.1); border-color:rgba(255,126,126,.45); color:#ffeaea;}
+  .alt-btn.wrong .letter{background:var(--bad); border-color:var(--bad); color:#2b0505;}
+  .alt-btn:disabled{cursor:default;}
+  .q-feedback{
+    margin-top:12px; padding:11px 13px; border-radius:var(--r-md);
+    font-size:12.3px; line-height:1.62;
+    border-left:3px solid var(--good); background:rgba(126,240,200,.06); color:#d6f5ec;
+  }
+  .q-feedback.wrong{border-left-color:var(--bad); background:rgba(255,126,126,.06); color:#ffd8d8;}
+  .q-feedback b{color:#fff;}
+  .q-reset{
+    margin-top:10px; font-size:11px; color:var(--accent);
+    background:none; border:1px solid var(--line-2); border-radius:var(--r-pill);
+    padding:5px 12px; cursor:pointer; font-family:inherit; transition:.2s var(--ease);
+  }
+  .q-reset:hover{background:rgba(94,200,255,.08);}
+
+  .mobile-only{display:none;}
+
+  @media (max-width:1380px){
+    /* viewport estreita: a barra de animação vai para a direita e a escala encolhe,
+       eliminando a colisão entre os dois overlays */
+    #animBar{left:auto; right:12px; transform:none; padding:4px; gap:1px;}
+    #animBar button{padding:5px 9px; font-size:10.5px;}
+    #animBar .speed{padding:0 7px; gap:5px;}
+    #animBar .speed > span:first-child{display:none;}
+    #animBar .speed input[type=range]{width:44px;}
+    #scaleBox{bottom:12px; left:12px; padding:7px 10px;}
+    #scaleBar{width:84px;}
+    #scaleLabel{font-size:9.5px;}
+  }
+  @media (max-width:1220px){
+    #app{grid-template-columns:286px 1fr 344px;}
+    #labControls{max-height:min(48vh, calc(100% - 200px));}
+    #labControls .ctrl-col{min-width:150px;}
+  }
+  @media (max-width:900px){
+    #app{grid-template-columns:1fr; grid-template-rows:58px 1fr; overflow-x:hidden;}
+    body.aula #app{grid-template-rows:58px 54px 1fr;}
+    #viewport{grid-column:1 / -1; grid-row:2;}
+    body.aula #viewport{grid-row:3;}
+    .panel{
+      position:absolute; top:58px; bottom:0; width:300px; max-width:88vw;
+      transition:transform .3s var(--ease); z-index:16;
+    }
+    body.aula .panel{top:112px;}
+    #left{left:0; transform:translateX(-104%);}
+    #right{right:0; transform:translateX(104%); border-left:1px solid var(--line);}
+    body.show-left #left{transform:translateX(0);}
+    body.show-right #right{transform:translateX(0);}
+    .mobile-only{display:inline-flex;}
+    .topbar-modes,.mode-tabs{display:none;}
+    #moduleBar{padding-left:12px; padding-right:12px;}
+    #animBar{
+      left:auto; right:12px; transform:none; bottom:80px;
+      flex-wrap:wrap; max-width:min(212px, calc(100% - 24px));
+      border-radius:var(--r-lg); justify-content:center; padding:4px;
+    }
+    #animBar .speed{padding:0 8px;}
+    #animBar .speed > span:first-child{display:inline;}
+    #animBar .speed input[type=range]{width:56px;}
+    #labControls{
+      left:12px; right:12px; transform:none; width:auto;
+      bottom:146px; max-height:min(44vh, calc(100% - 180px));
+    }
+    #labControls .ctrl-col{min-width:140px;}
+    .brand small{display:none;}
+    #topLeftInfo{max-width:min(52vw, 260px);}
+    .pill{font-size:10px;}
+    .pill.disclaimer{font-size:9.5px;}
+    #tooltip{display:none;}
+  }
+  @media (max-width:560px){
+    header{padding:0 10px; gap:8px;}
+    .brand h1{font-size:13px;}
+    #moduleBar .mod-btn{padding:8px 9px;}
+    #moduleBar .mod-btn .ttl{font-size:10.5px;}
+    #topLeftInfo{max-width:48vw;}
+    #scaleBox{padding:7px 10px;}
+    #scaleBar{width:84px;}
+    #labControls{bottom:150px; padding:10px 12px;}
+    #labControls .ctrl-row{gap:10px;}
+    #labControls .ctrl-col{min-width:118px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="orb"></div>
+      <div>
+        <h1>Cellular Vision <b>3D</b></h1>
+        <small>Laboratório de Citologia</small>
+      </div>
+    </div>
+
+    <div class="mode-tabs" role="tablist" aria-label="Modo de uso">
+      <button id="modeExplore" class="active" aria-selected="true">🔬 Explorar</button>
+      <button id="modeAula" aria-selected="false">📚 Aula</button>
+    </div>
+
+    <div class="topbar-modes" role="group" aria-label="Modos de visualização">
+      <button data-mode="full" class="active" title="Visão completa">◉ Completa</button>
+      <button data-mode="transparent" title="Membrana transparente">◌ Transparente</button>
+      <button data-mode="section" title="Corte transversal">◐ Corte</button>
+      <button data-mode="explode" title="Explosão anatômica">✥ Explosão</button>
+      <button data-mode="isolate" title="Isolar estrutura selecionada">◎ Isolar</button>
+      <button data-mode="compare" title="Comparação estrutural: fixe uma estrutura e compare-a com outra">⇋ Comparar</button>
+      <button data-mode="wire" title="Malha estrutural">◇ Malha</button>
+    </div>
+
+    <div style="display:flex; gap:4px; align-items:center; flex:none;">
+      <button id="hubBtn" class="ghost" title="Sistema de endomembranas">⇄</button>
+      <button id="studyBtn" class="ghost" title="Modo estudo (texto maior)">📖</button>
+      <button id="resetBtn" class="ghost" title="Restaurar visão inicial">↺</button>
+      <button id="btnLeft" class="ghost mobile-only" title="Painel esquerdo">☰</button>
+      <button id="btnRight" class="ghost mobile-only" title="Painel direito">i</button>
+    </div>
+  </header>
+
+  <div id="moduleBar" role="tablist" aria-label="Módulos de estudo">
+    <button class="mod-btn active" data-mod="0"><span class="num">Módulo 0</span><span class="ttl">Fundamentos</span></button>
+    <button class="mod-btn" data-mod="1"><span class="num">Módulo 1</span><span class="ttl">Membrana &amp; Transporte</span></button>
+    <button class="mod-btn" data-mod="2"><span class="num">Módulo 2</span><span class="ttl">Citoplasma &amp; Organelas</span></button>
+    <button class="mod-btn" data-mod="3"><span class="num">Módulo 3</span><span class="ttl">Respiração Celular</span></button>
+    <button class="mod-btn" data-mod="4"><span class="num">Módulo 4</span><span class="ttl">Núcleo &amp; Ciclo Celular</span></button>
+    <button class="mod-btn" data-mod="5"><span class="num">Módulo 5</span><span class="ttl">Fotossíntese</span></button>
+    <button class="mod-btn" data-mod="6"><span class="num">Módulo 6</span><span class="ttl">Comunicação &amp; Adesão</span></button>
+    <button class="mod-btn" data-mod="7"><span class="num">Módulo 7</span><span class="ttl">Diferenciação &amp; Morte</span></button>
+    <button class="mod-btn" data-mod="8"><span class="num">Módulo 8</span><span class="ttl">Vírus &amp; Replicação</span></button>
+  </div>
+
+  <aside id="left" class="panel">
+    <div id="explorePanel">
+      <div class="search">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7e94a8" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+        </svg>
+        <input id="searchInput" type="text" placeholder="Buscar estrutura ou função..." aria-label="Buscar estrutura" />
+      </div>
+
+      <div class="sec">
+        <h2>Estruturas celulares</h2>
+        <div class="org-list" id="orgList"></div>
+      </div>
+
+      <div class="sec">
+        <h2>Visualização</h2>
+        <div class="row"><label for="memSlider">Transparência da membrana</label><span class="val" id="memVal">55%</span></div>
+        <input type="range" id="memSlider" min="0" max="100" value="55" />
+        <div class="row"><label for="dissSlider">Dissecação progressiva</label><span class="val" id="dissVal">0%</span></div>
+        <input type="range" id="dissSlider" min="0" max="100" value="0" />
+        <div class="row"><label for="expSlider">Explosão anatômica</label><span class="val" id="expVal">0%</span></div>
+        <input type="range" id="expSlider" min="0" max="100" value="0" />
+        <label class="toggle-row"><input type="checkbox" id="cbCito" checked /> Citosol</label>
+        <label class="toggle-row"><input type="checkbox" id="cbCitoesq" checked /> Citoesqueleto</label>
+        <label class="toggle-row"><input type="checkbox" id="cbMolec" /> Detalhe molecular da membrana</label>
+        <label class="toggle-row"><input type="checkbox" id="cbLabels" checked /> Etiqueta flutuante da seleção</label>
+      </div>
+
+      <div class="sec">
+        <h2>Animações celulares</h2>
+        <label class="toggle-row"><input type="checkbox" id="anVes" checked /> Tráfego de vesículas (RE→Golgi→membrana)</label>
+        <label class="toggle-row"><input type="checkbox" id="anTrans" checked /> Transporte pela membrana</label>
+        <label class="toggle-row"><input type="checkbox" id="anATP" checked /> Produção de ATP</label>
+        <label class="toggle-row"><input type="checkbox" id="anTradu" checked /> Tradução ribossômica</label>
+        <p class="note">Representações esquemáticas e didáticas. Velocidades e escalas não são proporcionais às reais.</p>
+      </div>
+
+      <div class="sec">
+        <h2>Níveis de observação</h2>
+        <div class="org-list" id="levelList">
+          <button class="org-item" data-level="1"><span class="org-swatch" style="background:#5ec8ff;color:#5ec8ff"></span><span class="nm">Nível 1 — Visão celular</span></button>
+          <button class="org-item" data-level="2"><span class="org-swatch" style="background:#7ef0c8;color:#7ef0c8"></span><span class="nm">Nível 2 — Subcelular</span></button>
+          <button class="org-item" data-level="3"><span class="org-swatch" style="background:#ffcc66;color:#ffcc66"></span><span class="nm">Nível 3 — Estrutural</span></button>
+          <button class="org-item" data-level="4"><span class="org-swatch" style="background:#ff8ab5;color:#ff8ab5"></span><span class="nm">Nível 4 — Molecular</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="aulaPanel">
+      <div class="aula-header">
+        <span class="mnum" id="aulaNum">Módulo 0</span>
+        <h2 id="aulaTitle">—</h2>
+        <p id="aulaSub">—</p>
+      </div>
+      <div class="theory" id="aulaTheory"></div>
+    </div>
+  </aside>
+
+  <main id="viewport">
+    <canvas id="c"></canvas>
+
+    <div id="worldLabel" aria-hidden="true">
+      <div class="lb-chip"><span class="lb-dot"></span><span id="worldLabelText">—</span></div>
+      <div class="lb-pin"></div>
+    </div>
+
+    <div id="topLeftInfo" class="overlay">
+      <div class="pill"><span class="lvl" id="lvlText">Nível 1</span><span id="lvlDesc">Visão celular</span></div>
+      <div class="pill" id="zoomPill">Distância: 30.0 μm</div>
+      <div class="pill disclaimer" id="disclaimerPill">
+        Reconstrução didática tridimensional. Escalas, proporções e velocidades são aproximadas e qualificadas.
+      </div>
+    </div>
+
+    <div id="scaleBox" class="overlay">
+      <div id="scaleBar"></div>
+      <div id="scaleLabel">— μm</div>
+    </div>
+
+    <div id="animBar" class="overlay clickable">
+      <button id="playBtn" title="Reproduzir / pausar animações">⏸ Pausar</button>
+      <button id="restartBtn" title="Reiniciar animações">↺</button>
+      <div class="speed">
+        <span>Vel.</span>
+        <input type="range" id="speedSlider" min="10" max="300" value="100" aria-label="Velocidade das animações" />
+        <span id="speedVal">1.0×</span>
+      </div>
+    </div>
+
+    <div id="labControls" class="clickable">
+      <h4 id="labTitle">Simulador</h4>
+      <div id="labContent"></div>
+    </div>
+
+    <div id="loading">
+      <div class="loader-ring"></div>
+      <p>Construindo a célula...</p>
+    </div>
+  </main>
+
+  <aside id="right" class="panel">
+    <div id="ficha"></div>
+    <div id="questionCard">
+      <span class="q-badge">Questão estilo ENEM / Unicamp</span>
+      <div class="q-text" id="qText">—</div>
+      <div class="q-alts" id="qAlts"></div>
+      <div id="qFeedback"></div>
+    </div>
+  </aside>
+</div>
+
+<div id="tooltip" role="status"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+/*__JS__*/
+</script>
+</body>
+</html>
