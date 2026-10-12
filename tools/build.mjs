@@ -7,13 +7,30 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const JS_DIR = path.join(ROOT, 'js');
+const SRC_DIR = path.join(ROOT, '..', 'src');
 const TEMPLATE = path.join(ROOT, 'template.html');
 const OUT = path.join(ROOT, '..', 'index.html');
 
+/* Ordem de dependência: cada arquivo só referencia o que já foi declarado antes.
+   dados -> estado -> cenas -> núcleo -> interface -> motor */
 const FILES = [
-  '01-science.js', '02-modules.js', '03-state.js', '04-cell.js', '05-anim.js',
-  '06-modes.js', '07-select.js', '08-ui.js', '09-sims.js', '10-main.js'
+  'dados/citologia.js',        // catálogo científico das organelas
+  'dados/modulos.js',          // módulos de estudo do núcleo original
+  'dados/biologia.js',         // trilhas de Biologia para ENEM/Unicamp
+  'dados/quimica.js',          // trilhas de Química para ENEM/Unicamp
+  'dados/trilhas.js',          // registro unificado das trilhas
+  'nucleo/estado.js',          // estado global e utilidades
+  'cenas/celula.js',           // geometria 3D da célula
+  'cenas/animacoes.js',        // animações de processos celulares
+  'cenas/ecossistema.js',      // cena 3D de Ecologia
+  'cenas/sistema-humano.js',   // cena 3D de Fisiologia Humana
+  'cenas/moleculas.js',        // cenas moleculares de Química
+  'cenas/registro.js',          // gerenciador de cenas (troca entre célula, ecossistema, corpo e moléculas)
+  'nucleo/visualizacao.js',    // modos de visualização
+  'nucleo/selecao.js',         // seleção e identificação visual
+  'interface/ui.js',           // interface, fichas e questões
+  'interface/simuladores.js',  // simuladores interativos
+  'nucleo/motor.js'            // renderer, câmera, loop e boot
 ];
 
 const IMPORT_RE = /^\s*import\s+[^;]*?from\s*['"]([^'"]+)['"]\s*;?\s*$/gm;
@@ -25,7 +42,7 @@ const declared = new Map();   // nome -> arquivo que declarou primeiro
 const conflicts = [];
 
 for (const f of FILES){
-  const raw = fs.readFileSync(path.join(JS_DIR, f), 'utf8');
+  const raw = fs.readFileSync(path.join(SRC_DIR, f), 'utf8');
 
   /* 1. remove imports relativos (o bundle é um único módulo) */
   let code = raw.replace(IMPORT_RE, (m, spec) => {

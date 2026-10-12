@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { state, RENDER, ORGANELLE_INDEX, allMaterials, matState, registry, cellRoot } from './03-state.js';
-import { groups, setCellType } from './04-cell.js';
-import { anim } from './05-anim.js';
-import { materialsOf, applyIsolate, applyHub, applyCellTypeVisibility } from './06-modes.js';
-import { refreshListAvailability } from './08-ui.js';
+import { state, RENDER, ORGANELLE_INDEX, allMaterials, matState, registry, cellRoot } from '../nucleo/estado.js';
+import { groups, setCellType } from '../cenas/celula.js';
+import { anim } from '../cenas/animacoes.js';
+import { materialsOf, applyIsolate, applyHub, applyCellTypeVisibility } from '../nucleo/visualizacao.js';
+import { refreshListAvailability } from './ui.js';
 
 /* =====================================================================
    PARTE 8 — SIMULADORES DOS MÓDULOS
@@ -655,6 +655,103 @@ const simMolecular = {
   teardown(){}
 };
 
+/* =====================================================================
+   SIMULADORES DAS TRILHAS DE BIOLOGIA E QUÍMICA
+
+   Um único simulador genérico serve a todos os temas das trilhas: os
+   controles são gerados a partir de `sim.parametros` declarado no
+   próprio tema, e cada valor é escrito no objeto de parâmetros da
+   cena 3D correspondente. Assim não há código específico por tema.
+   ===================================================================== */
+import { CENAS, cenaParaSim } from '../cenas/registro.js';
+
+/* passo do controle quando o tema não declara um */
+function simTrilhaPasso(p){
+  if (p.passo) return p.passo;
+  if (p.max <= 1) return 0.01;
+  if (p.max <= 12) return 1;
+  return 0.5;
+}
+
+/* nota contextual exibida embaixo dos controles, por tipo de tema */
+const SIM_NOTAS = {
+  'ecossistema': 'A cobertura vegetal fixa carbono pela fotossíntese; o oxigênio liberado vem da fotólise da água. Emissões elevadas acidificam o cenário e escurecem a fumaça.',
+  'zoologia': 'O exoesqueleto de quitina reduz a perda de água e permitiu a conquista do ambiente terrestre; a umidade e a temperatura limitam a distribuição dos artrópodes.',
+  'evolucao': 'As mariposas escuras já existiam na população: a pressão seletiva apenas muda a frequência dos fenótipos ao longo das gerações.',
+  'botanica': 'Os estômatos abrem com água e luz; a fase de fixação de carbono depende dos produtos da fase clara e não ocorre obrigatoriamente no escuro.',
+  'ambiental': 'O tratamento reduz a carga de nutrientes lançada no lago; sem ele, a eutrofização leva à anoxia por consumo de oxigênio pelos decompositores.',
+  'sistema-humano': 'Mais CO₂ e pH menor nos tecidos deslocam a curva de saturação para a direita e favorecem a liberação de O₂ — é o efeito Bohr. Nos pulmões o mecanismo atua em sentido oposto.',
+  'genetica': 'O emparelhamento é complementar: adenina com timina, citosina com guanina. O crossing-over ocorre na prófase I da meiose.',
+  'estequiometria': 'Divida os mols de cada reagente pelo seu coeficiente: o menor resultado é o reagente limitante, e o produto se calcula a partir dele.',
+  'solucoes': 'Na diluição a quantidade de soluto se conserva: C₁V₁ = C₂V₂. A cor clareia porque a concentração cai, não porque o soluto desaparece.',
+  'equilibrio': 'No equilíbrio as velocidades direta e inversa se igualam, mas as concentrações não precisam. O tampão atenua a variação de pH, sem anulá-la.',
+  'cinetica': 'O catalisador diminui a energia de ativação e não é consumido; ele não desloca o equilíbrio, apenas encurta o tempo de chegada até ele.',
+  'eletroquimica': 'Na pilha, o ânodo é o polo negativo (oxidação) e o cátodo é o positivo (redução). A massa depositada segue Q = i·t e um mol de elétrons vale 96.500 C.',
+  'organica': 'O carbono é tetravalente; ligações duplas tornam o trecho planar e reduzem os hidrogênios da cadeia.'
+};
+
+function simTrilhaFabrica(tipo, titulo){
+  return {
+    title: titulo,
+    mount(el, unidade){
+      const cena = cenaParaSim(tipo);
+      const alvo = (CENAS[cena] && CENAS[cena].params) || null;
+      const defs = (unidade && unidade.sim && unidade.sim.parametros) || [];
+      this.tipo = tipo;
+      this.cena = cena;
+      this.alvo = alvo;
+      this.defs = defs;
+
+      if (!defs.length){
+        el.innerHTML = `<div class="lab-note">A cena 3D deste tema é interativa por si: gire, aproxime e observe os elementos destacados.</div>`;
+        return;
+      }
+
+      el.innerHTML = defs.map(p => `
+        <div class="ctrl-row">
+          <label for="simtr-${p.id}">${p.rotulo}</label>
+          <span class="status" id="simtr-v-${p.id}"></span>
+        </div>
+        <input type="range" id="simtr-${p.id}" data-par="${p.id}"
+               min="${p.min}" max="${p.max}" step="${simTrilhaPasso(p)}" value="${p.valor}"
+               aria-label="${p.rotulo}" />`).join('')
+        + `<div class="lab-note">${SIM_NOTAS[tipo] || ''}</div>`;
+
+      el.querySelectorAll('input[data-par]').forEach(inp => {
+        inp.addEventListener('input', () => {
+          const id = inp.dataset.par;
+          const v = parseFloat(inp.value);
+          if (this.alvo && (id in this.alvo)) this.alvo[id] = v;
+          const c = CENAS[this.cena];
+          if (c && typeof c.apply === 'function') c.apply();
+          const lbl = el.querySelector('#simtr-v-' + id);
+          if (lbl) lbl.textContent = this.formatar(id, v);
+        });
+        /* valor inicial no rótulo */
+        const id = inp.dataset.par;
+        const lbl = el.querySelector('#simtr-v-' + id);
+        if (lbl) lbl.textContent = this.formatar(id, parseFloat(inp.value));
+      });
+    },
+    formatar(id, v){
+      if (id === 'corrente') return v.toFixed(1) + ' A';
+      if (id === 'tempo') return v.toFixed(0) + ' min';
+      if (id === 'carbono' || id === 'geracoes') return v.toFixed(0);
+      if (id === 'concentracao' && v < 0.1) return v.toFixed(3) + ' mol/L';
+      if (v <= 1) return Math.round(v*100) + '%';
+      return v.toFixed(2);
+    },
+    apply(){
+      /* os valores já foram aplicados ao montar; reaplica por garantia */
+      if (!this.alvo || !this.defs.length) return;
+      const c = CENAS[this.cena];
+      if (c && typeof c.apply === 'function') c.apply();
+    },
+    tick(){},
+    teardown(){}
+  };
+}
+
 /* ----------------------------- REGISTRO ---------------------------- */
 export const SIMULATORS = {
   'cell-compare':simCellCompare,
@@ -666,7 +763,24 @@ export const SIMULATORS = {
   'junctions':simJunctions,
   'differentiation':simDifferentiation,
   'virus':simVirus,
-  'molecular':simMolecular
+  'molecular':simMolecular,
+
+  /* trilhas de Biologia */
+  'ecossistema':     simTrilhaFabrica('ecossistema',     'Simulador de ecossistema'),
+  'zoologia':        simTrilhaFabrica('zoologia',        'Adaptações dos artrópodes'),
+  'evolucao':        simTrilhaFabrica('evolucao',        'Seleção natural em ação'),
+  'botanica':        simTrilhaFabrica('botanica',         'Fisiologia vegetal'),
+  'ambiental':       simTrilhaFabrica('ambiental',       'Poluição e tratamento'),
+  'sistema-humano':  simTrilhaFabrica('sistema-humano',  'Fisiologia integrada'),
+
+  /* trilhas de Química */
+  'genetica':        simTrilhaFabrica('genetica',        'Molécula de DNA'),
+  'estequiometria':  simTrilhaFabrica('estequiometria',  'Reagente limitante'),
+  'solucoes':        simTrilhaFabrica('solucoes',        'Diluição e concentração'),
+  'equilibrio':      simTrilhaFabrica('equilibrio',      'Equilíbrio e pH'),
+  'cinetica':        simTrilhaFabrica('cinetica',        'Cinética e catálise'),
+  'eletroquimica':   simTrilhaFabrica('eletroquimica',   'Pilha e eletrólise'),
+  'organica':        simTrilhaFabrica('organica',        'Cadeias carbônicas')
 };
 
 export { restoreEmissiveAll, setEmissive };

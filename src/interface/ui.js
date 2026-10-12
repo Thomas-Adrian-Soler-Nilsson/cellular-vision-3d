@@ -1,6 +1,7 @@
-import { SCIENCE, ORG_ORDER, isAvailable } from './01-science.js';
-import { MODULES } from './02-modules.js';
-import { state, ORGANELLE_INDEX } from './03-state.js';
+import { SCIENCE, ORG_ORDER, isAvailable } from '../dados/citologia.js';
+import { MODULES } from '../dados/modulos.js';
+import { TRILHAS, TRILHA_ORDER, INCIDENCIA, resolveUnidade, unidadesDaTrilha } from '../dados/trilhas.js';
+import { state, ORGANELLE_INDEX } from '../nucleo/estado.js';
 
 /* =====================================================================
    PARTE 9 — INTERFACE: lista, ficha científica, escala, teoria, questões
@@ -212,14 +213,27 @@ export function updateScaleBar(camera, controls, viewport, force){
 
 /* --------------------------- teoria (aula) ------------------------- */
 export function renderTheory(modId){
-  const m = MODULES[modId];
-  if (!m) return;
+  const u = resolveUnidade(modId);
+  if (!u) return;
 
-  dom.aulaNum.textContent = 'Módulo ' + modId;
-  dom.aulaTitle.textContent = m.titulo;
-  dom.aulaSub.textContent = m.subtitulo;
+  dom.aulaNum.textContent = u.rotulo || ('Módulo ' + modId);
+  dom.aulaTitle.textContent = (u.icone ? u.icone + ' ' : '') + u.titulo;
+  dom.aulaSub.textContent = u.subtitulo || '';
 
-  dom.aulaTheory.innerHTML = m.teoria.map(b => {
+  /* cartão de incidência ENEM × UNICAMP, quando o tema traz o dado */
+  const inc = u.incidencia
+    ? `<div class="inc-card">
+        <h4>📊 Incidência nos vestibulares</h4>
+        <div class="inc-grid">
+          <div class="inc-cell"><div class="k">ENEM</div><div class="v enem">${u.incidencia.enem || '—'}</div></div>
+          <div class="inc-cell"><div class="k">UNICAMP</div><div class="v uni">${u.incidencia.unicamp || '—'}</div></div>
+          <div class="inc-cell"><div class="k">Relevância</div><div class="v">${u.incidencia.peso || '—'}</div></div>
+        </div>
+        ${u.incidencia.nota ? `<div class="inc-note">${u.incidencia.nota}</div>` : ''}
+      </div>`
+    : '';
+
+  dom.aulaTheory.innerHTML = inc + u.teoria.map(b => {
     const body = b.p ? `<p>${b.p}</p>` : '';
     const list = b.u ? `<ul>${b.u.map(x => `<li>${x}</li>`).join('')}</ul>` : '';
     return `<div class="theory-block"><h4>${b.h}</h4>${body}${list}</div>`;
@@ -228,15 +242,18 @@ export function renderTheory(modId){
 
 /* --------------------------- questão ------------------------------- */
 export function renderQuestion(modId){
-  const m = MODULES[modId];
-  if (!m || !m.questao) return;
+  const u = resolveUnidade(modId);
+  if (!u || !u.questao) return;
 
-  dom.qText.textContent = m.questao.texto;
+  const fonte = u.questao.fonte
+    ? `<span class="q-fonte">📝 Estilo ${u.questao.fonte}</span><br>` : '';
+
+  dom.qText.innerHTML = fonte + u.questao.texto;
   dom.qFeedback.innerHTML = '';
   dom.qAlts.innerHTML = '';
 
   const letters = ['A', 'B', 'C', 'D', 'E'];
-  m.questao.alts.forEach((alt, i) => {
+  u.questao.alts.forEach((alt, i) => {
     const b = document.createElement('button');
     b.className = 'alt-btn';
     b.innerHTML = `<span class="letter">${letters[i]}</span><span>${alt.t}</span>`;
@@ -246,9 +263,9 @@ export function renderQuestion(modId){
 }
 
 function answerQuestion(modId, idx, btn){
-  const m = MODULES[modId];
-  if (!m) return;
-  const alts = m.questao.alts;
+  const u = resolveUnidade(modId);
+  if (!u) return;
+  const alts = u.questao.alts;
   const chosen = alts[idx];
   if (!chosen) return;
 
@@ -267,6 +284,50 @@ function answerQuestion(modId, idx, btn){
 
   const reset = document.getElementById('qReset');
   if (reset) reset.addEventListener('click', () => renderQuestion(modId));
+}
+
+/* ------------------------ barras de trilha ------------------------- */
+export function buildTrilhaBar(){
+  const bar = document.getElementById('trilhaBar');
+  if (!bar) return;
+  bar.querySelectorAll('.tr-btn').forEach(b => { b.remove(); });
+  TRILHA_ORDER.forEach(id => {
+    const t = TRILHAS[id];
+    const b = document.createElement('button');
+    b.className = 'tr-btn' + (state.trilha === id ? ' active' : '');
+    b.dataset.trilha = id;
+    b.setAttribute('aria-selected', String(state.trilha === id));
+    b.innerHTML = `<span class="ic">${t.icone || '•'}</span>${t.nome}`;
+    bar.insertBefore(b, document.getElementById('trilhaInfo'));
+  });
+}
+
+export function setTrilhaBarActive(trilhaId){
+  document.querySelectorAll('#trilhaBar .tr-btn').forEach(b => {
+    const on = b.dataset.trilha === trilhaId;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  const t = TRILHAS[trilhaId];
+  const info = document.getElementById('trilhaInfo');
+  if (info && t) info.textContent = t.descricao || t.nome;
+}
+
+/* reconstrói a barra de módulos conforme a trilha ativa */
+export function buildModuleBar(){
+  const bar = document.getElementById('moduleBar');
+  if (!bar) return;
+  bar.querySelectorAll('.mod-btn').forEach(b => { b.remove(); });
+
+  const unidades = unidadesDaTrilha(state.trilha);
+  unidades.forEach(u => {
+    if (!u) return;
+    const b = document.createElement('button');
+    b.className = 'mod-btn' + (String(u.key) === String(state.currentModule) ? ' active' : '');
+    b.dataset.mod = u.key;
+    b.innerHTML = `<span class="num">${u.rotulo || ''}</span><span class="ttl">${u.titulo}</span>`;
+    bar.appendChild(b);
+  });
 }
 
 /* --------------------------- barra de módulos ---------------------- */

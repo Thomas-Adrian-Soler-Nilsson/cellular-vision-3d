@@ -21,6 +21,24 @@ fs.mkdirSync(OUTDIR, { recursive: true });
 
 const base = fs.readFileSync(SRC, 'utf8');
 
+/* perfil persistente: aquece o cache do CDN na primeira execução e
+   torna as capturas seguintes determinísticas (sem variar com a
+   latência de rede do fetch do three.js)                    */
+const PERFIL = path.join(ROOT, '_chrome-perfil');
+fs.mkdirSync(PERFIL, { recursive: true });
+
+/* aquecimento: uma primeira carga popula o cache do CDN */
+try {
+  execFileSync(CHROME, [
+    '--headless=new', '--disable-gpu', '--no-sandbox',
+    '--user-data-dir=' + PERFIL,
+    '--enable-unsafe-swiftshader', '--use-gl=swiftshader',
+    '--hide-scrollbars', '--virtual-time-budget=9000',
+    '--window-size=800,500', '--dump-dom',
+    'file:///' + SRC.replace(/\\/g, '/').replace(/ /g, '%20')
+  ], { encoding:'utf8', maxBuffer: 32*1024*1024, stdio:['ignore','pipe','ignore'] });
+} catch (e){ /* o aquecimento é best-effort */ }
+
 /* cada cena injeta um script que prepara o estado antes da captura */
 const SCENES = [
   { name:'01-visao-completa', pre:`` },
@@ -34,13 +52,29 @@ const SCENES = [
   { name:'09-modulo-3-respiracao', pre:`document.getElementById('modeAula').click(); document.querySelector('#moduleBar .mod-btn[data-mod="3"]').click();` },
   { name:'10-modulo-5-fotossintese', pre:`document.getElementById('modeAula').click(); document.querySelector('#moduleBar .mod-btn[data-mod="5"]').click();` },
   { name:'11-modo-malha', pre:`document.querySelector('.topbar-modes button[data-mode="wire"]').click();` },
-  { name:'12-detalhe-molecular', pre:`document.getElementById('cbMolec').checked = true; document.getElementById('cbMolec').dispatchEvent(new Event('change',{bubbles:true}));` }
+  { name:'12-detalhe-molecular', pre:`document.getElementById('cbMolec').checked = true; document.getElementById('cbMolec').dispatchEvent(new Event('change',{bubbles:true}));` },
+
+  /* ---- trilhas de Biologia e Química ---- */
+  { name:'13-trilha-biologia-ecologia',
+    pre:`document.getElementById('modeAula').click(); document.querySelector('#trilhaBar .tr-btn[data-trilha="biologia"]').click();` },
+  { name:'14-trilha-biologia-fisiologia',
+    pre:`document.getElementById('modeAula').click(); document.querySelector('#trilhaBar .tr-btn[data-trilha="biologia"]').click(); document.querySelector('#moduleBar .mod-btn[data-mod="fisiologia-humana"]').click();` },
+  { name:'15-trilha-biologia-genetica',
+    pre:`document.getElementById('modeAula').click(); document.querySelector('#trilhaBar .tr-btn[data-trilha="biologia"]').click(); document.querySelector('#moduleBar .mod-btn[data-mod="genetica"]').click();` },
+  { name:'16-trilha-quimica-estequiometria',
+    pre:`document.getElementById('modeAula').click(); document.querySelector('#trilhaBar .tr-btn[data-trilha="quimica"]').click(); document.querySelector('#moduleBar .mod-btn[data-mod="estequiometria"]').click();` },
+  { name:'17-trilha-quimica-eletroquimica',
+    pre:`document.getElementById('modeAula').click(); document.querySelector('#trilhaBar .tr-btn[data-trilha="quimica"]').click(); document.querySelector('#moduleBar .mod-btn[data-mod="eletroquimica"]').click();` },
+  { name:'18-trilha-quimica-equilibrio',
+    pre:`document.getElementById('modeAula').click(); document.querySelector('#trilhaBar .tr-btn[data-trilha="quimica"]').click(); document.querySelector('#moduleBar .mod-btn[data-mod="equilibrio"]').click();` }
 ];
 
 for (const sc of SCENES){
   const inject = `<script>
     window.addEventListener('load', () => {
-      setTimeout(() => { try { ${sc.pre} } catch(e){ console.error('scene', e.message); } }, 1500);
+      /* 3500ms: dá tempo ao boot, à compilação dos shaders da cena
+         pedida e ao tween da câmera antes da captura                 */
+      setTimeout(() => { try { ${sc.pre} } catch(e){ console.error('scene', e.message); } }, 3500);
     });
   <\/script>`;
   const html = base.replace('</head>', inject + '</head>');
@@ -53,6 +87,7 @@ for (const sc of SCENES){
   try {
     execFileSync(CHROME, [
       '--headless=new', '--disable-gpu', '--no-sandbox',
+      '--user-data-dir=' + PERFIL,
       '--enable-unsafe-swiftshader', '--use-gl=swiftshader',
       '--hide-scrollbars', '--virtual-time-budget=11000',
       '--window-size=1600,1000', '--screenshot=' + png, url

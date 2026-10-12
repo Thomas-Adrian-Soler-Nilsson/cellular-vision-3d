@@ -2,29 +2,36 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-import { SCIENCE, isAvailable } from './01-science.js';
-import { MODULES } from './02-modules.js';
+import { SCIENCE, isAvailable } from '../dados/citologia.js';
+import { MODULES } from '../dados/modulos.js';
+import { TRILHAS, resolveUnidade } from '../dados/trilhas.js';
 import {
   state, RENDER, cellRoot, allMaterials, pickables, ORGANELLE_INDEX,
   registry, matState, cellNoise
-} from './03-state.js';
-import { groups, buildCell, buildVirus, setCellType } from './04-cell.js';
-import { anim, updateAnimations, buildAnimations } from './05-anim.js';
+} from './estado.js';
+import { groups, buildCell, buildVirus, setCellType } from '../cenas/celula.js';
+import { anim, updateAnimations, buildAnimations } from '../cenas/animacoes.js';
+import {
+  ecoRoot, humRoot, molRoot,
+  CENAS, setCena, tickCenas, prepareCena, ativarCenaDoSim,
+  aplicarParametrosDoTema, cenaParaSim
+} from '../cenas/registro.js';
 import {
   snapshotMaterials, tagMaterialsWithOwner, applyMembraneOpacity, applyWireframe,
   applyIsolate, setSection, applyHub, applyCellTypeVisibility, applyGroupVisibility,
   materialsOf, levelForDistance, distanceForLevel
-} from './06-modes.js';
+} from './visualizacao.js';
 import {
   initSelection, applySelectionVisuals, clearSelectionVisuals,
   updateSelectionVisuals, setPinned, pinned, sel
-} from './07-select.js';
+} from './selecao.js';
 import {
   dom, buildOrganelleList, refreshListAvailability, setActiveListItem, filterList,
-  renderFicha, updateScaleBar, renderTheory, renderQuestion, setModuleBarActive, setUIMode
-} from './08-ui.js';
-import { SIMULATORS, restoreEmissiveAll } from './09-sims.js';
-import { computeOrganelleBounds } from './03-state.js';
+  renderFicha, updateScaleBar, renderTheory, renderQuestion, setModuleBarActive, setUIMode,
+  buildTrilhaBar, setTrilhaBarActive, buildModuleBar
+} from '../interface/ui.js';
+import { SIMULATORS, restoreEmissiveAll } from '../interface/simuladores.js';
+import { computeOrganelleBounds } from './estado.js';
 
 /* =====================================================================
    PARTE 10 — NÚCLEO DA APLICAÇÃO
@@ -42,7 +49,11 @@ const tooltip = document.getElementById('tooltip');
 
 /* ============================= INIT ================================ */
 function initThree(){
-  renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+  /* preserveDrawingBuffer garante que o último quadro completo fique no
+     buffer — indispensável para as capturas de tela headless saírem
+     sempre com o conteúdo certo, em vez de pegarem o buffer no meio de
+     uma limpeza e saírem pretas. O custo em desempenho é desprezível. */
+  renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance', preserveDrawingBuffer:true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(viewport.clientWidth, viewport.clientHeight, false);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -56,6 +67,15 @@ function initThree(){
   scene.background = new THREE.Color(0x03060a);
   scene.fog = new THREE.FogExp2(0x03060a, 0.0072);
   scene.add(cellRoot);
+  /* as cenas das trilhas ficam ocultas até serem pedidas */
+  ecoRoot.visible = false;
+  humRoot.visible = false;
+  molRoot.visible = false;
+  /* o corpo humano é um pouco maior para ler melhor em quadro */
+  humRoot.scale.setScalar(1.15);
+  scene.add(ecoRoot);
+  scene.add(humRoot);
+  scene.add(molRoot);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
@@ -129,6 +149,8 @@ function screenToNDC(ev){
 }
 
 function pickAt(ev){
+  /* a seleção por clique só faz sentido na cena da célula */
+  if (state.cena !== 'celula') return null;
   screenToNDC(ev);
   raycaster.setFromCamera(pointerNDC, camera);
   const list = pickables.filter(o => o.visible && !o.userData.__typeHidden);
@@ -187,6 +209,14 @@ function updateFocusTween(dt){
 /* ======================== CONTROLADOR DE MÓDULOS =================== */
 let currentSimKey = null;
 
+/* distância de câmera adequada a cada cena */
+const CAMERA_DIST = {
+  celula: 28,
+  ecossistema: 32,
+  'sistema-humano': 28,
+  moleculas: 27
+};
+
 export function applyModule(modId){
   /* encerra o simulador anterior */
   if (activeSim && typeof activeSim.teardown === 'function'){
@@ -195,21 +225,23 @@ export function applyModule(modId){
   restoreEmissiveAll();
 
   state.currentModule = String(modId);
-  const m = MODULES[state.currentModule];
-  if (!m) return;
+  const u = resolveUnidade(modId);
+  if (!u) return;
 
-  setModuleBarActive(modId);
-  renderTheory(state.currentModule);
-  renderQuestion(state.currentModule);
-
-  /* restaura o tipo celular adequado ao módulo */
-  const sim = m.sim || {};
-  const wantedType = sim.type === 'photosynthesis' ? 'vegetal' : 'animal';
-  if (state.cellType !== wantedType){
-    setCellType(wantedType);
-    refreshListAvailability();
-    applyCellTypeVisibility();
+  /* acompanha a trilha à qual a unidade pertence */
+  const trilhaMudou = state.trilha !== u.trilha;
+  state.trilha = u.trilha;
+  if (trilhaMudou){
+    setTrilhaBarActive(u.trilha);
+    buildModuleBar();
   }
+  setModuleBarActive(modId);
+  renderTheory(modId);
+  renderQuestion(modId);
+
+  const sim = u.sim || {};
+
+  /* efeitos transitórios de estado, herdados dos módulos de citologia */
   state.osmosis = 0;
   state.apoptosis = 0;
   state.junctionType = null;
@@ -220,31 +252,58 @@ export function applyModule(modId){
   cellRoot.scale.setScalar(1);
   RENDER.cellScaleK = 1;
 
-  /* foco inicial do módulo */
   currentSimKey = sim.type;
 
-  if (sim.focus && sim.focus.length){
-    const first = sim.focus.find(id => ORGANELLE_INDEX[id] && isAvailable(id, state.cellType));
-    if (first) selectOrganelle(first, false);
+  /* ---------- CITOOLOGIA: cena da célula e foco em organela ---------- */
+  if (u.trilha === 'citologia'){
+    setCena('celula');
+
+    const wantedType = sim.type === 'photosynthesis' ? 'vegetal' : 'animal';
+    if (state.cellType !== wantedType){
+      setCellType(wantedType);
+      refreshListAvailability();
+      applyCellTypeVisibility();
+    }
+
+    const focoLista = Array.isArray(sim.focus) ? sim.focus
+                    : (typeof sim.focus === 'string' ? [sim.focus] : []);
+    if (focoLista.length){
+      const first = focoLista.find(id => ORGANELLE_INDEX[id] && isAvailable(id, state.cellType));
+      if (first) selectOrganelle(first, false);
+    } else {
+      selectOrganelle(null, false);
+    }
+
+  /* ---------- BIOLOGIA / QUÍMICA: cena própria do tema ---------- */
   } else {
-    selectOrganelle(null, false);
+    ativarCenaDoSim(sim.type);
+    /* temas que recaem sobre a célula mantêm o foco em organela */
+    if (state.cena === 'celula' && sim.focus){
+      const focoLista = Array.isArray(sim.focus) ? sim.focus
+                      : (typeof sim.focus === 'string' ? [sim.focus] : []);
+      const first = focoLista.find(id => ORGANELLE_INDEX[id] && isAvailable(id, state.cellType));
+      selectOrganelle(first || null, false);
+    } else {
+      selectOrganelle(null, false);
+    }
+    aplicarParametrosDoTema(sim.type, sim.parametros);
   }
 
-  /* painel do laboratório */
+  /* ---------- painel do laboratório ---------- */
   const s = SIMULATORS[sim.type];
   if (s){
     activeSim = s;
     dom.labTitle.textContent = s.title;
     dom.labControls.classList.add('show');
-    try { s.mount(dom.labContent); } catch(e){ console.error(e); }
+    try { s.mount(dom.labContent, u); } catch(e){ console.error(e); }
     if (typeof s.apply === 'function') s.apply();
   } else {
     activeSim = null;
     dom.labControls.classList.remove('show');
   }
 
-  /* aplica realce emissivo definido pelo módulo */
-  if (sim.emissive){
+  /* aplica realce emissivo definido pelo módulo (apenas na célula) */
+  if (u.trilha === 'citologia' && sim.emissive){
     Object.keys(sim.emissive).forEach(id => {
       materialsOf(id).forEach(mat => {
         const base = matState.get(mat);
@@ -253,7 +312,22 @@ export function applyModule(modId){
       });
     });
   }
-  window.__cvCameraHome();
+
+  /* enquadra a cena ativa */
+  const d = CAMERA_DIST[state.cena] || 28;
+  focusOn(new THREE.Vector3(0, 0, 0), d);
+}
+
+/* troca de trilha pela barra superior: abre o primeiro tema da trilha */
+export function aplicarTrilha(trilhaId){
+  if (!TRILHAS[trilhaId]) return;
+  state.trilha = trilhaId;
+  setTrilhaBarActive(trilhaId);
+  buildModuleBar();
+  const unidades = (trilhaId === 'citologia')
+    ? Object.keys(MODULES).sort((a, b) => Number(a) - Number(b))
+    : TRILHAS[trilhaId].temas.map(t => t.id);
+  if (unidades.length) applyModule(unidades[0]);
 }
 
 /* ============================== UI ================================= */
@@ -274,16 +348,33 @@ function bindUI(){
     if (groups.plantGroup) groups.plantGroup.visible = false;
     if (groups.prokGroup) groups.prokGroup.visible = false;
     selectOrganelle(null, false);
+    /* o modo explorar volta sempre à cena da célula */
+    setCena('celula');
   });
   document.getElementById('modeAula').addEventListener('click', () => {
     setUIMode('aula');
     applyModule(state.currentModule);
   });
 
-  /* --- barra de módulos --- */
-  document.querySelectorAll('#moduleBar .mod-btn').forEach(b => {
-    b.addEventListener('click', () => applyModule(b.dataset.mod));
-  });
+  /* --- barra de trilhas (delegação: os botões são reconstruídos) --- */
+  const trilhaBarEl = document.getElementById('trilhaBar');
+  if (trilhaBarEl){
+    trilhaBarEl.addEventListener('click', ev => {
+      const b = ev.target.closest('.tr-btn');
+      if (!b) return;
+      aplicarTrilha(b.dataset.trilha);
+    });
+  }
+
+  /* --- barra de módulos (delegação: os botões são reconstruídos) --- */
+  const moduleBarEl = document.getElementById('moduleBar');
+  if (moduleBarEl){
+    moduleBarEl.addEventListener('click', ev => {
+      const b = ev.target.closest('.mod-btn');
+      if (!b) return;
+      applyModule(b.dataset.mod);
+    });
+  }
 
   /* --- busca --- */
   dom.searchInput.addEventListener('input', e => filterList(e.target.value));
@@ -568,6 +659,10 @@ function animate(){
   updateFocusTween(dt);
   updateAnimations(dt);
 
+  /* cenas das trilhas: ecossistema, corpo humano e moléculas.
+     A célula continua animada por updateAnimations acima. */
+  tickCenas(dt);
+
   /* explosão anatômica: afasta os nós radialmente */
   const k = state.explode;
   for (const id in ORGANELLE_INDEX){
@@ -615,6 +710,8 @@ function boot(){
 
     bindUI();
     buildOrganelleList();
+    buildTrilhaBar();
+    buildModuleBar();
     renderFicha(null);
     updateScaleBar(camera, controls, viewport, true);
 
@@ -639,6 +736,14 @@ function boot(){
 window.__cvSelect = selectOrganelle;
 window.__cvApplyModule = applyModule;
 window.__cvState = state;
+/* diagnóstico de renderização usado pelas sondagens */
+window.__cvInfo = () => renderer ? {
+  chamadas: renderer.info.render.calls,
+  triangulos: renderer.info.render.triangles,
+  camera: camera.position.toArray().map(v => +v.toFixed(1)),
+  alvo: controls.target.toArray().map(v => +v.toFixed(1)),
+  clipping: (renderer.clippingPlanes || []).length
+} : null;
 window.__cvCameraHome = function(){
   focusOn(new THREE.Vector3(0, 0, 0), 28 / (RENDER.cellScaleK || 1));
 };

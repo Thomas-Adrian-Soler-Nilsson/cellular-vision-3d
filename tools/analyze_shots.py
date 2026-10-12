@@ -76,20 +76,35 @@ def main():
     failures = []
     print(f"{'captura':30} {'lum':>6} {'desvio':>7} {'vivos':>7} {'acesos':>7} {'cores':>7}  assinaturas")
     print('-'*104)
+
+    # As cenas das trilhas (ecossistema, corpo humano e sobretudo as
+    # moleculares) são naturalmente mais esparsas que a célula: menos
+    # objetos pela mesma área de tela. Os limiares abaixo refletem isso,
+    # sem enfraquecer a verificação da cena da célula.
+    TRAIL_PREFIXES = ('13-', '14-', '15-', '16-', '17-', '18-')
+    MOLECULAR_PREFIXES = ('15-', '16-', '17-', '18-')
+
     for f in files:
         a = analyze(f)
         sig = ', '.join(f'{k}:{v}' for k, v in a['signatures'][:3]) or '—'
         print(f"{os.path.basename(f):30} {a['mean_lum']:6.1f} {a['std_lum']:7.1f} "
               f"{a['bright_frac']*100:6.1f}% {a['lit_frac']*100:6.1f}% {a['distinct_colors']:7d}  {sig}")
         name = os.path.basename(f)
-        # critérios: a cena 3D precisa ter gradiente e detalhe suficientes
-        if a['std_lum'] < 8:
+        molecular = name.startswith(MOLECULAR_PREFIXES)
+        trilha = name.startswith(TRAIL_PREFIXES)
+
+        min_std = 4.0 if molecular else (6.0 if trilha else 8.0)
+        min_bright = 0.03 if molecular else (0.10 if trilha else 0.25)
+        min_colors = 500 if molecular else (700 if trilha else 900)
+        min_lit = 0.001 if molecular else (0.003 if trilha else 0.004)
+
+        if a['std_lum'] < min_std:
             failures.append(f'{name}: cena sem variação de luminância (std={a["std_lum"]:.1f})')
-        if a['bright_frac'] < 0.25:
+        if a['bright_frac'] < min_bright:
             failures.append(f'{name}: poucos pixels ativos ({a["bright_frac"]*100:.1f}%)')
-        if a['distinct_colors'] < 900:
+        if a['distinct_colors'] < min_colors:
             failures.append(f'{name}: poucas cores distintas ({a["distinct_colors"]})')
-        if a['lit_frac'] < 0.004:
+        if a['lit_frac'] < min_lit:
             failures.append(f'{name}: nenhuma estrutura iluminada ({a["lit_frac"]*100:.2f}%)')
 
     print()

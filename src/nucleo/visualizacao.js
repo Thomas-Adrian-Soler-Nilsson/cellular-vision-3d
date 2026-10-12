@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import {
   state, allMaterials, membraneMaterials, matState, pickables,
   registry, cellRoot, ORGANELLE_NODES, ORGANELLE_INDEX, HUB_SET, RENDER
-} from './03-state.js';
-import { groups, setCellType } from './04-cell.js';
-import { anim } from './05-anim.js';
+} from './estado.js';
+import { groups, setCellType } from '../cenas/celula.js';
+import { anim } from '../cenas/animacoes.js';
 
 /* =====================================================================
    PARTE 6 — MODOS DE VISUALIZAÇÃO E SISTEMA DE SELEÇÃO

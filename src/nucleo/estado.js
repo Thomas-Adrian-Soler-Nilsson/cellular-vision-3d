@@ -7,6 +7,8 @@ export const RENDER = { baseCellR:10, level:1, cellR:10, cellScaleK:1, renderer:
 
 export const state = {
   mode:'explore', currentModule:'0',
+  trilha:'citologia',        /* citologia | biologia | quimica */
+  cena:'celula',             /* cena 3D ativa */
   membraneOpacity:0.55, dissection:0, explode:0,
   isolate:false, section:false, wireframe:false, hub:false,
   selectedId:null, hoverId:null,

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SCIENCE } from './01-science.js';
-import { state, ORGANELLE_INDEX, allMaterials, cellRoot } from './03-state.js';
+import { SCIENCE } from '../dados/citologia.js';
+import { state, ORGANELLE_INDEX, allMaterials, cellRoot } from './estado.js';
 
 /* =====================================================================
    PARTE 7 — SISTEMA DE IDENTIFICAÇÃO VISUAL DA SELEÇÃO

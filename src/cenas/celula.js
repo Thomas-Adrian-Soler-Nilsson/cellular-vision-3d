@@ -3,7 +3,7 @@ import {
   state, RENDER, CELL_R, NUC_POS, NUC_R, golden, dummy, cellRoot,
   membraneMaterials, reg, deformVec, makeBlobGeometry, registerOrganelle,
   tagOrganelle, registry, ORGANELLE_INDEX
-} from './03-state.js';
+} from '../nucleo/estado.js';
 
 /* =====================================================================
    PARTE 4 — CONSTRUÇÃO DO MODELO CELULAR

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, reg, registry, cellRoot, pickables } from './03-state.js';
+import { state, reg, registry, cellRoot, pickables } from '../nucleo/estado.js';
 
 /* =====================================================================
    PARTE 5 — ANIMAÇÕES DOS PROCESSOS CELULARES
